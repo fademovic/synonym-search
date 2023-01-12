@@ -43,23 +43,18 @@ namespace SynonymSearchServer.Services
                 }
 
                 // when word exist synonym should be added through AddSynonym method
-                // other solution can be either to override existing word or
-                // to enable user to remove word/synonym but that is out of the scope of this task 
                 if (synonyms.ContainsKey(word))
                 {
                     logger.LogError("Error, word {Word} already exists", word);
                     return false;
                 }
-                else
-                {
-                    synonyms[word] = synonyms_list;
-                    cache.Set("synonyms", synonyms, TimeSpan.FromMinutes(30));
 
-                    // Update synonyms for other words in list
-                    foreach (var synonym in synonyms_list)
-                    {
-                        UpdateSynonyms(synonym, word);
-                    }
+                synonyms[word] = synonyms_list;
+                cache.Set("synonyms", synonyms, TimeSpan.FromMinutes(30));
+
+                foreach (var synonym in synonyms_list.ToList())
+                {
+                    UpdateSynonyms(synonym, word);
                 }
 
                 logger.LogInformation("Successfully added word {Word} with synonyms {Synonyms}", word, synonyms_list);
@@ -78,15 +73,9 @@ namespace SynonymSearchServer.Services
             {
                 var synonyms = cache.Get<Dictionary<string, List<string>>>("synonyms");
 
-                if (synonyms == null)
-                {
-                    logger.LogError("Error, dictionary is empty");
-                    return false;
-                }
-
                 // can not add synonym if word doesn't exist
                 // in that case AddWord method is correct way to add synonym for a word 
-                if (!synonyms.ContainsKey(word))
+                if (synonyms == null || !synonyms.ContainsKey(word))
                 {
                     logger.LogError("Error adding synonym {Synonym}, word {Word} doesn't exist", synonym, word);
                     return false;
@@ -116,12 +105,11 @@ namespace SynonymSearchServer.Services
 
                 // add new synonym for a word
                 synonyms[word].Add(synonym);
-                cache.Set("synonyms", synonyms, TimeSpan.FromMinutes(30));
 
                 // Update synonyms for new synonym
                 UpdateSynonyms(synonym, word);
 
-                logger.LogInformation("Successfully added synonym {Synonym} for word {Word}",synonym, word);
+                logger.LogInformation("Successfully added synonym {Synonym} for word {Word}", synonym, word);
                 return true;
 
             }
@@ -138,12 +126,7 @@ namespace SynonymSearchServer.Services
             {
                 var synonyms = cache.Get<Dictionary<string, List<string>>>("synonyms");
 
-                if (synonyms == null)
-                {
-                    return new List<string>();
-                }
-
-                if (synonyms.ContainsKey(word))
+                if (synonyms!= null && synonyms.ContainsKey(word))
                 {
                     return synonyms[word];
                 }
@@ -153,43 +136,71 @@ namespace SynonymSearchServer.Services
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error getting synonyms for word {Word}", word);
-
                 return new List<string>();
             }
 
+        }
+
+        private (List<string> synonymsforWord, List<string> synonymsforSynonym) GetExistingSynonyms(string word, string synonym)
+        {
+            // get existing synonyms for both word and synonym
+            var synonymsforWord = GetSynonyms(word);
+            var synonymsforSynonym = GetSynonyms(synonym);
+            return (synonymsforWord, synonymsforSynonym);
+        }
+
+        private void UpdateSyonymsForSynonym (Dictionary<string, List<string>> synonyms, List<string> synonymsforSynonym, string word)
+        {
+            if (synonymsforSynonym.Count > 0)
+            {
+                foreach (var value in synonymsforSynonym)
+                {
+                    if (value != word)
+                    {
+                        synonyms[value].Add(word);
+                        synonyms[word].Add(value);
+                    }
+                }
+            }
+        }
+
+        private void AddWordToSynonym(Dictionary<string, List<string>> synonyms, string word, string synonym)
+        {
+            // making sure that lookup work in both directions 
+            if (synonyms.ContainsKey(synonym))
+            {
+                synonyms[synonym].Add(word);
+            }
+            else
+            {
+                synonyms[synonym] = new List<string> { word };
+            }
         }
 
         private void UpdateSynonyms(string synonym, string word)
         {
             try
             {
-                // get existing synonyms for word
-                var synonymsforWord = GetSynonyms(word);
+                // get existing synonyms for both word and synonym
+                var(synonymsforWord, synonymsforSynonym) = GetExistingSynonyms(word, synonym);
                 var synonyms = cache.Get<Dictionary<string, List<string>>>("synonyms");
+
+                UpdateSyonymsForSynonym(synonyms, synonymsforSynonym, word);
 
                 if (synonymsforWord.Count > 0)
                 {
-                    // making sure that lookup work in both directions 
-                    if (synonyms.ContainsKey(synonym))
-                    {
-                        synonyms[synonym].Add(word);
-                    }
-                    else
-                    {
-                        synonyms[synonym] = new List<string> { word };
-                    }
+                    AddWordToSynonym(synonyms, word, synonym);
 
-                    // add rest of values from word synonyms to synonym
+                    // add the rest of the values from the "word" synonyms to the "synonym" synonyms
                     foreach (var value in synonymsforWord)
                     {
-                        if(value != synonym)
+                        if (value != synonym && !synonymsforSynonym.Contains(value))
                         {
                             synonyms[synonym].Add(value);
+
                         }
                     }
                 }
-
-                cache.Set("synonyms", synonyms, TimeSpan.FromMinutes(30));
             }
 
             catch (Exception ex)
@@ -199,24 +210,29 @@ namespace SynonymSearchServer.Services
 
         }
 
+        private bool AreSynonyms(List<DatamuseWord>? words)
+        {
+            if (words == null)
+            {
+                return false;
+            }
+
+            return words.Count > 0;
+        }
+
         private async Task<bool> IsSynonym(string word1, string word2)
         {
             var response = await client.GetAsync($"https://api.datamuse.com/words?rel_syn={word1}&ml={word2}");
 
-            if (response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode)
             {
-                var json = await response.Content.ReadAsStringAsync();
-                var words = JsonConvert.DeserializeObject<List<DatamuseWord>>(json);
-
-                if (words == null)
-                {
-                    return false;
-                }
-
-                return words.Count > 0;
+                return false;
             }
 
-            return false;
+            var json = await response.Content.ReadAsStringAsync();
+            var words = JsonConvert.DeserializeObject<List<DatamuseWord>>(json);
+
+            return AreSynonyms(words);
         }
     }
 }
