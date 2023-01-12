@@ -6,7 +6,6 @@ import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogTitle from "@mui/material/DialogTitle";
-import Snackbar from "@mui/material/Snackbar";
 import TextField from "@mui/material/TextField";
 
 import { ADD_SYNONYM_SCHEMA } from "modules/SearchSynonyms/components/AddSynonymForm/addSynonymSchema";
@@ -15,7 +14,9 @@ import {
   ADD_SYNONYM_SUCCESS,
   ADD_SYNONYM_TITLE,
   CANCEL_TEXT,
+  ERROR_MESSAGE,
 } from "modules/SearchSynonyms/utils/constants";
+import { Snackbar } from "components";
 import { useSynonymRequests } from "modules/SearchSynonyms/hooks/useSynonymRequests";
 
 export const AddSynonymForm = ({ close, open, word }) => {
@@ -26,6 +27,7 @@ export const AddSynonymForm = ({ close, open, word }) => {
       addSynonymForWord,
       isAddingSynonym,
       isSynonymAddedSuccessfully,
+      isErrorAddingSynonym,
     },
   } = useSynonymRequests(word);
 
@@ -36,10 +38,10 @@ export const AddSynonymForm = ({ close, open, word }) => {
   };
 
   React.useEffect(() => {
-    if (isSynonymAddedSuccessfully) {
+    if (isSynonymAddedSuccessfully || isErrorAddingSynonym) {
       setOpenSnackbar(true);
     }
-  }, [isSynonymAddedSuccessfully, setOpenSnackbar]);
+  }, [isSynonymAddedSuccessfully, isErrorAddingSynonym, setOpenSnackbar]);
 
   return (
     <>
@@ -90,9 +92,11 @@ export const AddSynonymForm = ({ close, open, word }) => {
       </Dialog>
       <Snackbar
         open={openSnackbar}
-        autoHideDuration={3000}
-        onClose={() => setOpenSnackbar(false)}
-        message={ADD_SYNONYM_SUCCESS}
+        close={() => setOpenSnackbar(false)}
+        message={
+          isSynonymAddedSuccessfully ? ADD_SYNONYM_SUCCESS : ERROR_MESSAGE
+        }
+        type={isSynonymAddedSuccessfully ? "success" : "error"}
       />
     </>
   );

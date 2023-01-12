@@ -10,19 +10,24 @@ import {
   AddWordForm,
   WordCard,
 } from "modules/SearchSynonyms/components";
-import { LOADING_SYNONYMS } from "modules/SearchSynonyms/utils/constants";
+import {
+  ERROR_MESSAGE,
+  LOADING_SYNONYMS,
+} from "modules/SearchSynonyms/utils/constants";
 import { Navbar } from "components";
+import { Snackbar } from "components";
 import { useDebounce } from "hooks/useDebounce";
 import { useSynonymRequests } from "modules/SearchSynonyms/hooks/useSynonymRequests";
 
 const SearchSynonyms = () => {
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [openSnackbar, setOpenSnackbar] = React.useState(false);
   const [openAddWordDialog, setOpenAddWordDialog] = React.useState(false);
   const [openAddSynonymDialog, setOpenAddSynonymDialog] = React.useState(false);
 
   const debouncedSearchTerm = useDebounce(searchTerm);
   const {
-    GET_SYNONYMS: { synonyms, isLoadingSynonyms },
+    GET_SYNONYMS: { synonyms, isLoadingSynonyms, isErrorGettingSynonyms },
   } = useSynonymRequests(debouncedSearchTerm);
 
   const showLoadingMessage = searchTerm !== "" && isLoadingSynonyms;
@@ -35,6 +40,12 @@ const SearchSynonyms = () => {
     setOpenAddSynonymDialog(false);
   };
 
+  React.useEffect(() => {
+    if (isErrorGettingSynonyms) {
+      setOpenSnackbar(true);
+    }
+  }, [isErrorGettingSynonyms, setOpenSnackbar]);
+
   return (
     <div>
       <Navbar setSearchTerm={setSearchTerm} />
@@ -42,7 +53,8 @@ const SearchSynonyms = () => {
         {showLoadingMessage ? (
           <p>{LOADING_SYNONYMS}</p>
         ) : (
-          synonyms && (
+          synonyms &&
+          synonyms.length > 0 && (
             <WordCard
               word={debouncedSearchTerm}
               synonyms={synonyms}
@@ -66,6 +78,12 @@ const SearchSynonyms = () => {
           <AddIcon />
         </Fab>
       </FabContainer>
+      <Snackbar
+        open={openSnackbar}
+        close={() => setOpenSnackbar(false)}
+        message={ERROR_MESSAGE}
+        type={"error"}
+      />
     </div>
   );
 };

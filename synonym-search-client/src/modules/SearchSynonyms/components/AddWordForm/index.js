@@ -9,7 +9,6 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogTitle from "@mui/material/DialogTitle";
 import IconButton from "@mui/material/IconButton";
 import Grid from "@mui/material/Grid";
-import Snackbar from "@mui/material/Snackbar";
 import TextField from "@mui/material/TextField";
 
 import { ADD_WORD_SCHEMA } from "modules/SearchSynonyms/components/AddWordForm/addWordSchema";
@@ -19,13 +18,20 @@ import {
   ADD_WORD_SUCCESS,
   ADD_WORD_TITLE,
   CANCEL_TEXT,
+  ERROR_MESSAGE,
 } from "modules/SearchSynonyms/utils/constants";
+import { Snackbar } from "components";
 import { useSynonymRequests } from "modules/SearchSynonyms/hooks/useSynonymRequests";
 
 export const AddWordForm = ({ close, open }) => {
   const [openSnackbar, setOpenSnackbar] = React.useState(false);
   const {
-    ADD_WORD: { addWordWithSynonyms, isAddingWord, isWordAddedSuccessfully },
+    ADD_WORD: {
+      addWordWithSynonyms,
+      isAddingWord,
+      isWordAddedSuccessfully,
+      isErrorAddingWord,
+    },
   } = useSynonymRequests();
 
   const onSubmit = (values, { setSubmitting }) => {
@@ -35,10 +41,10 @@ export const AddWordForm = ({ close, open }) => {
   };
 
   React.useEffect(() => {
-    if (isWordAddedSuccessfully) {
+    if (isWordAddedSuccessfully || isErrorAddingWord) {
       setOpenSnackbar(true);
     }
-  }, [isWordAddedSuccessfully, setOpenSnackbar]);
+  }, [isWordAddedSuccessfully, isErrorAddingWord, setOpenSnackbar]);
 
   return (
     <>
@@ -120,9 +126,9 @@ export const AddWordForm = ({ close, open }) => {
       </Dialog>
       <Snackbar
         open={openSnackbar}
-        autoHideDuration={3000}
-        onClose={() => setOpenSnackbar(false)}
-        message={ADD_WORD_SUCCESS}
+        close={() => setOpenSnackbar(false)}
+        message={isWordAddedSuccessfully ? ADD_WORD_SUCCESS : ERROR_MESSAGE}
+        type={isWordAddedSuccessfully ? "success" : "error"}
       />
     </>
   );
